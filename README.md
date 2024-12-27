@@ -61,5 +61,6 @@ Shiro
    Shiro < 1.7.1
    当与Spring一起使用Apache Shiro时，特制的HTTP请求可能导致认证绕过
    http://127.0.0.1/admin/%20
-   
+ - CVE-2022-32532
+   Shiro < 1.9.1
    
