@@ -63,4 +63,121 @@ Shiro
    http://127.0.0.1/admin/%20
  - CVE-2022-32532
    Shiro < 1.9.1
+
+
+
+   Shiro 550 漏洞分析：
+   登录：   
+   package org.apache.shiro.mgt;
+     AbstractRememberMeManager.java
+       public void onSuccessfulLogin(Subject subject, AuthenticationToken token, AuthenticationInfo info) {
+        //清除之前的认证
+        forgetIdentity(subject);
+
+        //保存新的认证
+        //如果勾选了记住我就进入记住认证的函数
+        if (isRememberMe(token)) {
+            rememberIdentity(subject, token, info);
+        } else {
+            if (log.isDebugEnabled()) {
+                log.debug("AuthenticationToken did not indicate RememberMe is requested.  " +
+                        "RememberMe functionality will not be executed for corresponding account.");
+            }
+        }
+      }
+       public void rememberIdentity(Subject subject, AuthenticationToken token, AuthenticationInfo authcInfo) {
+         //获取认证的信息
+         PrincipalCollection principals = getIdentityToRemember(subject, authcInfo);
+        //保存认证的信息
+         rememberIdentity(subject, principals);
+       }
    
+    protected void rememberIdentity(Subject subject, PrincipalCollection accountPrincipals) {
+        byte[] bytes = convertPrincipalsToBytes(accountPrincipals);
+        rememberSerializedIdentity(subject, bytes);
+    }
+    protected byte[] convertPrincipalsToBytes(PrincipalCollection principals) {
+        //重点 序列化认证信息
+        byte[] bytes = serialize(principals);
+        if (getCipherService() != null) {
+            bytes = encrypt(bytes);
+        }
+        return bytes;
+    }
+    protected byte[] encrypt(byte[] serialized) {
+        byte[] value = serialized;
+        //获取加密类
+        CipherService cipherService = getCipherService();
+        if (cipherService != null) {
+            //加密，AES/CBC/PKCS5Padding
+            ByteSource byteSource = cipherService.encrypt(serialized, getEncryptionCipherKey());
+            value = byteSource.getBytes();
+        }
+        return value;
+    }
+  protected void rememberSerializedIdentity(Subject subject, byte[] serialized) {
+
+        if (!WebUtils.isHttp(subject)) {
+            if (log.isDebugEnabled()) {
+                String msg = "Subject argument is not an HTTP-aware instance.  This is required to obtain a servlet " +
+                        "request and response in order to set the rememberMe cookie. Returning immediately and " +
+                        "ignoring rememberMe operation.";
+                log.debug(msg);
+            }
+            return;
+        }
+
+
+        HttpServletRequest request = WebUtils.getHttpRequest(subject);
+        HttpServletResponse response = WebUtils.getHttpResponse(subject);
+
+        //base 64 encode it and store as a cookie:
+        String base64 = Base64.encodeToString(serialized);
+
+        Cookie template = getCookie(); //the class attribute is really a template for the outgoing cookies
+        Cookie cookie = new SimpleCookie(template);
+        cookie.setValue(base64);
+        cookie.saveTo(request, response);
+    }
+
+
+    protected byte[] getRememberedSerializedIdentity(SubjectContext subjectContext) {
+
+        if (!WebUtils.isHttp(subjectContext)) {
+            if (log.isDebugEnabled()) {
+                String msg = "SubjectContext argument is not an HTTP-aware instance.  This is required to obtain a " +
+                        "servlet request and response in order to retrieve the rememberMe cookie. Returning " +
+                        "immediately and ignoring rememberMe operation.";
+                log.debug(msg);
+            }
+            return null;
+        }
+
+        WebSubjectContext wsc = (WebSubjectContext) subjectContext;
+        if (isIdentityRemoved(wsc)) {
+            return null;
+        }
+
+        HttpServletRequest request = WebUtils.getHttpRequest(wsc);
+        HttpServletResponse response = WebUtils.getHttpResponse(wsc);
+
+        String base64 = getCookie().readValue(request, response);
+        // Browsers do not always remove cookies immediately (SHIRO-183)
+        // ignore cookies that are scheduled for removal
+        if (Cookie.DELETED_COOKIE_VALUE.equals(base64)) return null;
+
+        if (base64 != null) {
+            base64 = ensurePadding(base64);
+            if (log.isTraceEnabled()) {
+                log.trace("Acquired Base64 encoded identity [" + base64 + "]");
+            }
+            byte[] decoded = Base64.decode(base64);
+            if (log.isTraceEnabled()) {
+                log.trace("Base64 decoded byte array length: " + (decoded != null ? decoded.length : 0) + " bytes.");
+            }
+            return decoded;
+        } else {
+            //no cookie set - new site visitor?
+            return null;
+        }
+    }
