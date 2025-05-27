@@ -375,7 +375,8 @@ title="+ ID_VC_Welcome +"
 访问未授权接口/ui/vropspluginui/rest/services/updateova
 如果页面返回状态码为200、405，则可能存在漏洞
 
- https://github.com/NS-Sp4ce/CVE-2021-21972
+https://github.com/QmF0c3UK/CVE-2021-21972-vCenter-6.5-7.0-RCE-POC/blob/main/CVE-2021-21972.py（POC）
+https://github.com/NS-Sp4ce/CVE-2021-21972/blob/main/CVE-2021-21972.py（EXP）
 ```
 ```
 二、 CVE-2021-22005 – 任意文件上传导致远程代码执行
